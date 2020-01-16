@@ -18,6 +18,7 @@ use Magento\Framework\ObjectManagerInterface;
 use Magento\Catalog\Helper\Image as ImageHelper;
 use Magento\Catalog\Api\Data\ProductInterface;
 use Magento\Framework\Pricing\Render;
+use Magento\Catalog\Api\ProductRepositoryInterface;
 
 /**
  * Create an autocomplete item from a product.
@@ -51,24 +52,29 @@ class ItemFactory extends \Magento\Search\Model\Autocomplete\ItemFactory
     /**
      * @var array
      */
-    private $attributes;
+    protected $attributes;
+
+    protected $productRepository;
 
     /**
      * Constructor.
      *
-     * @param ObjectManagerInterface $objectManager   Object manager used to instantiate new item.
-     * @param ImageHelper            $imageHelper     Catalog product image helper.
-     * @param AttributeConfig        $attributeConfig Autocomplete attribute config.
+     * @param ObjectManagerInterface $objectManager Object manager used to instantiate new item.
+     * @param ImageHelper $imageHelper Catalog product image helper.
+     * @param AttributeConfig $attributeConfig Autocomplete attribute config.
      */
     public function __construct(
         ObjectManagerInterface $objectManager,
         ImageHelper $imageHelper,
-        AttributeConfig $attributeConfig
-    ) {
+        AttributeConfig $attributeConfig,
+        ProductRepositoryInterface $productRepository
+    )
+    {
         parent::__construct($objectManager);
-        $this->attributes    = $attributeConfig->getAdditionalSelectedAttributes();
-        $this->imageHelper   = $imageHelper;
+        $this->attributes = $attributeConfig->getAdditionalSelectedAttributes();
+        $this->imageHelper = $imageHelper;
         $this->objectManager = $objectManager;
+        $this->productRepository = $productRepository;
     }
 
     /**
@@ -93,12 +99,20 @@ class ItemFactory extends \Magento\Search\Model\Autocomplete\ItemFactory
     {
         $product = $data['product'];
 
-        $productData = [
-            'title' => $product->getName(),
-            'image' => $this->getImageUrl($product),
-            'url'   => $product->getProductUrl(),
-            'price' => $this->renderProductPrice($product, \Magento\Catalog\Pricing\Price\FinalPrice::PRICE_CODE),
-        ];
+        if ($this->showPrice($product->getId())) {
+            $productData = [
+                'title' => $product->getName(),
+                'image' => $this->getImageUrl($product),
+                'url' => $product->getProductUrl(),
+                'price' => $this->renderProductPrice($product, \Magento\Catalog\Pricing\Price\FinalPrice::PRICE_CODE),
+            ];
+        } else {
+            $productData = [
+                'title' => $product->getName(),
+                'image' => $this->getImageUrl($product),
+                'url' => $product->getProductUrl(),
+            ];
+          }
 
         foreach ($this->attributes as $attributeCode) {
             if ($product->hasData($attributeCode)) {
@@ -132,8 +146,8 @@ class ItemFactory extends \Magento\Search\Model\Autocomplete\ItemFactory
     /**
      * Renders product price.
      *
-     * @param \Magento\Catalog\Model\Product $product   The product
-     * @param string                         $priceCode The Price Code to render
+     * @param \Magento\Catalog\Model\Product $product The product
+     * @param string $priceCode The Price Code to render
      *
      * @return string
      */
@@ -184,6 +198,16 @@ class ItemFactory extends \Magento\Search\Model\Autocomplete\ItemFactory
         }
 
         return $this->priceRenderer;
+    }
+
+    public function showPrice($id)
+    {
+        $product = $this->productRepository->getById($id);
+        $faraPretStatus = $product->getData('farapret');
+        if ($faraPretStatus == "3102") {
+            return false;
+        }
+        return true;
     }
 }
 
